@@ -1,0 +1,39 @@
+<section class="wrap page">
+  <h1>Multi check</h1>
+  <p class="lede">Check several websites in one go. Each site gets its own report, and you'll receive one combined email when the last one finishes.</p>
+
+  <div data-guest-only>
+    <div class="split">
+      <div class="form-card">
+        <h2>Create a free account</h2>
+        <p>Multi check needs an email address so we know where to send the report.</p>
+        <a class="btn" href="/signup?next=/multi-check">Create account</a>
+      </div>
+      <div class="form-card">
+        <h2>Already have one?</h2>
+        <p>Log in to start a multi check.</p>
+        <a class="btn btn-ghost" href="/login?next=/multi-check">Log in</a>
+      </div>
+    </div>
+  </div>
+
+  <div data-user-only>
+    <form id="multi-form" class="panel" novalidate>
+      <div class="field">
+        <label for="multi-urls">Websites to check</label>
+        <textarea id="multi-urls" name="urls" placeholder="example.com&#10;https://www.example.org/docs/&#10;shop.example.net" required></textarea>
+        <p class="hint">One address per line, up to <span data-limit="multiMaxSites">20</span> sites. Each site is limited to {{manualMaxLinks}} links.</p>
+      </div>
+      <fieldset class="seg">
+        <legend class="visually-hidden">What to check</legend>
+        <label><input type="radio" name="mode" value="site" checked><span>Whole websites</span></label>
+        <label><input type="radio" name="mode" value="page"><span>Single pages</span></label>
+      </fieldset>
+      <p><button class="btn" type="submit">Start multi check</button></p>
+      <p class="form-error" role="alert"></p>
+    </form>
+    <p class="banner info small" id="outbox-note" hidden>Email isn't configured on this server, so report emails are saved in the <code>data/outbox</code> folder instead of being sent.</p>
+    <h2>Recent multi checks</h2>
+    <div id="batches"><p class="muted">Loading…</p></div>
+  </div>
+</section>

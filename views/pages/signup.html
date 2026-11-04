@@ -1,0 +1,29 @@
+<section class="wrap page split">
+  <div class="form-card">
+    <h1>Create a free account</h1>
+    <form id="signup-form" novalidate>
+      <div class="field">
+        <label for="s-email">Email</label>
+        <input id="s-email" name="email" type="email" autocomplete="email" required>
+        <p class="hint">Reports are sent here. It's also your login.</p>
+      </div>
+      <div class="field">
+        <label for="s-password">Password</label>
+        <input id="s-password" name="password" type="password" autocomplete="new-password" minlength="8" required>
+        <p class="hint">At least 8 characters.</p>
+      </div>
+      <button class="btn" type="submit">Create account</button>
+      <p class="form-error" role="alert"></p>
+    </form>
+    <p class="small">Already registered? <a href="/login" data-keep-next>Log in</a></p>
+  </div>
+  <div>
+    <h2>A free account gives you</h2>
+    <ul class="facts">
+      <li><b>Multi check</b>Check up to 20 sites in one batch and get a combined report by email.</li>
+      <li><b>Report history</b>Your site checks are saved under My reports instead of expiring after a week.</li>
+      <li><b>No security codes</b>Start checks without typing a code each time.</li>
+      <li><b>A path to Auto check</b>Pick a plan later if you want scheduled scans.</li>
+    </ul>
+  </div>
+</section>

@@ -1,0 +1,61 @@
+<section class="wrap page prose">
+  <h1>Frequently asked questions</h1>
+  <p class="lede">How LinkLantern decides what's broken, how it behaves on your server, and how to get the most out of it. See also <a href="/features">Features</a> and <a href="/error-codes">Error codes</a>.</p>
+
+  <dl class="faq">
+    <dt>What counts as a broken link?</dt>
+    <dd><p>Any reference that doesn't deliver what it points to: the server answers with an error status (such as 404 Not Found, 410 Gone or 500 Internal Server Error), the server can't be reached at all (unknown host, refused connection, timeout, certificate problems), or a chain of redirects never arrives anywhere (a loop, or more than 10 hops).</p></dd>
+
+    <dt>Is it free?</dt>
+    <dd><p>Site check is free and needs no account. Multi check is free with an account. Auto check, which runs scans on a schedule, is part of the paid <a href="/plans">plans</a>.</p></dd>
+
+    <dt>How deep does a whole-site check go?</dt>
+    <dd><p>Up to 10 clicks away from the starting page. Pages that nothing links to can't be discovered. Links to other hosts, including other subdomains of your own domain, are tested but not explored. If the starting address redirects (for example from <code>example.com</code> to <code>www.example.com</code>), the address it lands on becomes the site being checked.</p></dd>
+
+    <dt>Can I check only part of my site?</dt>
+    <dd><p>With Auto check, start from a folder such as <code>example.com/docs/</code> and tick <i>Stay inside this folder</i>. Every link on those pages is still tested, but only pages inside <code>/docs/</code> are explored for further links.</p></dd>
+
+    <dt>Can I skip certain URLs?</dt>
+    <dd><p>Two ways. Add rules to your robots.txt (see below), or in Auto check's advanced settings list text fragments to ignore. Any URL containing one of them is left out completely. This is the best defence against shop filters and sort options that turn a hundred products into thousands of URLs: add <code>sort=</code>, <code>color=</code> and similar parameters to the ignore list.</p></dd>
+
+    <dt>Does LinkLantern obey robots.txt?</dt>
+    <dd><p>Yes, always, for every host it contacts. It follows the current robots.txt standard (RFC 9309): rules for the user-agent <code>{{token}}</code> take priority, otherwise the <code>*</code> rules apply; <code>Allow</code> and <code>Disallow</code> support <code>*</code> wildcards and a trailing <code>$</code>; the longest matching rule wins. URLs that robots.txt excludes appear in the report as <i>Not checked</i> rather than as errors. If robots.txt itself returns a server error, the host is treated as off-limits, as the standard requires.</p>
+    <p>To keep LinkLantern out of a folder:</p>
+<pre>User-agent: {{token}}
+Disallow: /private/</pre></dd>
+
+    <dt>How do I slow the scan down?</dt>
+    <dd><p>LinkLantern already limits itself to two simultaneous requests per host with a short pause between them, and halves its pace on any host that answers 429 Too Many Requests or 503 Service Unavailable. To slow it further, add a crawl delay (in seconds) to robots.txt:</p>
+<pre>User-agent: {{token}}
+Crawl-delay: 2</pre>
+    <p>Auto check also lets you set a minimum gap between requests per schedule.</p></dd>
+
+    <dt>How does LinkLantern identify itself?</dt>
+    <dd><p>Every request carries the user-agent <code>{{userAgent}}</code>. If your firewall or analytics should treat it specially, match on <code>{{token}}</code>.</p></dd>
+
+    <dt>Why is a link reported broken when it opens fine in my browser?</dt>
+    <dd><p>Usually one of these:</p>
+    <p>The site blocks automated visitors and answers 403, 404, 429 or 999 to anything that isn't a browser. Many large social networks do this. The server may also see a burst of requests as an attack; allowing the crawler's IP address or user-agent fixes it.</p>
+    <p>The content depends on location, cookies or login. LinkLantern doesn't log in and doesn't share cookies between pages (it does keep cookies within a single redirect chain, which prevents most false redirect loops).</p>
+    <p>The URL is technically invalid, for example it contains a backslash. Some browsers quietly repair these; others don't, so they're reported.</p>
+    <p>The server was briefly unavailable. Timeouts and 429/503 answers are retried once after a pause, but a site that stays down during the scan is reported.</p></dd>
+
+    <dt>Does it run JavaScript?</dt>
+    <dd><p>No. Links that only appear after scripts run in the browser aren't seen. Server-rendered pages (PHP, Rails, Django, most CMSs and static site generators) work fully.</p></dd>
+
+    <dt>Are links with <code>rel="nofollow"</code> checked?</dt>
+    <dd><p>They're always tested. They're not explored for further links unless you turn on <i>Follow nofollow links</i> in Auto check. A page with <code>&lt;meta name="robots" content="nofollow"&gt;</code> is treated the same way.</p></dd>
+
+    <dt>Can it check password-protected pages or an intranet?</dt>
+    <dd><p>No. Pages must be publicly reachable from the server running LinkLantern. For security, the public service also refuses to contact private network addresses. If you run LinkLantern yourself inside your network you can allow them; see the README.</p></dd>
+
+    <dt>Can I open results in a spreadsheet?</dt>
+    <dd><p>Yes. Every report has a CSV download with one row per place a link appears, plus a JSON download with the full data, including redirect chains.</p></dd>
+
+    <dt>How long are reports kept?</dt>
+    <dd><p>Reports from checks run without an account are kept for 7 days. Reports from logged-in checks are kept until you delete them or your account.</p></dd>
+
+    <dt>Can I get fewer emails from Auto check?</dt>
+    <dd><p>Tick <i>Don't email me when a scan finds no problems</i> in a schedule's advanced settings. The report is still saved under My reports.</p></dd>
+  </dl>
+</section>

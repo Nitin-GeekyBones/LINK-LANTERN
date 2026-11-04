@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{title}} · LinkLantern</title>
+<meta name="description" content="{{description}}">
+<link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400;700&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500..800&display=swap">
+<link rel="stylesheet" href="/css/style.css">
+<script type="module" src="/js/main.js"></script>
+</head>
+<body data-page="{{pageId}}" data-auth="{{auth}}">
+<a class="visually-hidden" href="#main">Skip to content</a>
+<header class="site-header">
+  <div class="wrap bar">
+    <a class="brand" href="/" aria-label="LinkLantern home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M12 3h8M16 3v3" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M10 9.5c0-2 2.7-3.5 6-3.5s6 1.5 6 3.5V22c0 2-2.7 3.5-6 3.5S10 24 10 22z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 11.5c1.9 2.3 2.6 4 2.6 5.4a2.6 2.6 0 0 1-5.2 0c0-1.4.7-3.1 2.6-5.4z" fill="#e9a23b"/><path d="M12 28.5h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      LinkLantern
+    </a>
+    <div class="userbar">{{userbar}}</div>
+  </div>
+  <nav class="wrap mainnav" aria-label="Main">{{nav}}</nav>
+</header>
+<main id="main">
+{{content}}
+</main>
+<footer class="site-footer">
+  <div class="wrap">
+    <span>© {{year}} LinkLantern. Open-source link checker.</span>
+    <nav aria-label="Footer">
+      <a href="/error-codes">Error codes</a>
+      <a href="/features">Features</a>
+      <a href="/plans">Plans</a>
+      <a href="/sitemap">Sitemap</a>
+      <a href="/about">About</a>
+      <a href="/terms">Terms &amp; privacy</a>
+    </nav>
+  </div>
+</footer>
+</body>
+</html>

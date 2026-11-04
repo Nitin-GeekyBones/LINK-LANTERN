@@ -1,0 +1,21 @@
+<section class="wrap page">
+  <h1>Plans &amp; pricing</h1>
+  <p class="lede">Manual checks are free for everyone. Pay only if you want LinkLantern to watch your sites on a schedule.</p>
+  <fieldset class="seg" id="cycle" data-user-only>
+    <legend class="visually-hidden">Billing cycle</legend>
+    <label><input type="radio" name="cycle" value="monthly" checked><span>Pay monthly</span></label>
+    <label><input type="radio" name="cycle" value="yearly"><span>Pay yearly</span></label>
+  </fieldset>
+  <div class="plans-wrap">{{plansTable}}</div>
+  <p class="form-error" role="alert" id="plan-error"></p>
+  <div class="split">
+    <div>
+      <h2>Good to know</h2>
+      <p>Site check and Multi check stay limited to {{manualMaxLinks}} links per site on every plan. The monthly allowance applies to scheduled scans and resets on the 1st of each month.</p>
+      <p>Change or cancel whenever you like from <a href="/account">Account settings</a>. Schedules beyond a smaller plan's limit must be removed before downgrading.</p>
+    </div>
+    <div class="banner info" data-demo-billing hidden>
+      <p><b>Demo billing is on.</b> This installation has no payment provider connected, so choosing a plan switches it instantly at no charge. See the README to connect real billing.</p>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,23 @@
+{
+  "name": "linklantern",
+  "version": "1.0.0",
+  "description": "LinkLantern - a self-hosted broken link checker: site check, multi check, scheduled auto check, CSV export.",
+  "type": "module",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=20.18"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "fixture": "node test/fixture-site.js",
+    "test": "node --test test/*.test.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "cheerio": "^1.2.0",
+    "express": "^4.22.3",
+    "nodemailer": "^10.3.1",
+    "undici": "^7.30.1"
+  }
+}

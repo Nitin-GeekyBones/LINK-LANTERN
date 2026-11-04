@@ -1,0 +1,13 @@
+<section class="wrap page prose">
+  <h1>About LinkLantern</h1>
+  <p class="lede">LinkLantern is an open-source broken link checker you can use here or run on your own server.</p>
+  <p>It was built for the people who keep websites in good repair: developers, content editors, SEO specialists and agencies looking after dozens of client sites. The aim is a tool that's quick to use, honest about what it found, and considerate towards the servers it visits.</p>
+
+  <h2 id="crawler">About the crawler</h2>
+  <p>If you've seen <code>{{token}}</code> in your server logs, someone asked LinkLantern to check a website that links to yours, or your own site. The crawler identifies itself as:</p>
+  <pre>{{userAgent}}</pre>
+  <p>It only requests URLs that appear as links on the site being checked, obeys robots.txt and Crawl-delay, keeps to two parallel requests per host, and backs off if your server signals it's busy. To exclude it, add a robots.txt rule for <code>User-agent: {{token}}</code>. The <a href="/faq">FAQ</a> has examples.</p>
+
+  <h2 id="contact">Contact</h2>
+  <p>Questions, bug reports and feature ideas are welcome on the project's issue tracker, or by email to the operator of this installation.</p>
+</section>

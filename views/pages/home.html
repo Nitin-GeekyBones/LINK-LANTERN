@@ -1,0 +1,39 @@
+<section class="hero wrap">
+  <h1>Find every link on your site that goes nowhere.</h1>
+  <p class="lede">Enter an address and LinkLantern walks your pages the way a visitor would, testing every link, image, script and stylesheet it finds. You get a list of what's broken and exactly where it lives.</p>
+  {{> checker}}
+</section>
+
+<section class="wrap section">
+  <div class="services">
+    <div>
+      <h3>Site check</h3>
+      <p>Scan one page or an entire site right now, results on screen as they arrive. Free, no account.</p>
+      <p><a href="/site-check">Check a site</a></p>
+    </div>
+    <div>
+      <h3>Multi check</h3>
+      <p>Paste a list of sites, close the tab, and get one combined report by email when they're all done. Free with an account.</p>
+      <p><a href="/multi-check">Check several sites</a></p>
+    </div>
+    <div>
+      <h3>Auto check</h3>
+      <p>Put your sites on a daily, weekly or monthly schedule. Reports arrive in your inbox and stay available online.</p>
+      <p><a href="/auto-check">Schedule checks</a></p>
+    </div>
+  </div>
+</section>
+
+<section class="wrap section split">
+  <div>
+    <h2>Why broken links are worth fixing</h2>
+    <p>A dead link is a promise your site can't keep. Visitors who hit a 404 tend to leave, and search engine crawlers that follow links into dead ends spend their budget on nothing and index less of what matters.</p>
+    <p>Links rot quietly: pages get renamed, partners move, images get deleted from a CMS. A regular check catches them before your visitors do.</p>
+  </div>
+  <ul class="facts">
+    <li><b>Every reference, not just anchors</b>Images, srcset candidates, scripts, stylesheets, iframes, media, form targets, meta refresh and CSS <code>url()</code> values.</li>
+    <li><b>Redirect chains spelled out</b>Each hop is listed with its status code, so you can link straight to the final address.</li>
+    <li><b>Polite by design</b>Obeys robots.txt and Crawl-delay, limits how hard it hits your server, and backs off when asked to.</li>
+    <li><b>Export everything</b>Download any report as CSV for a spreadsheet, or JSON for your own tools.</li>
+  </ul>
+</section>

@@ -1,0 +1,38 @@
+<section class="wrap page prose">
+  <h1>Features</h1>
+  <h2>Three ways to check</h2>
+  <ul class="facts">
+    <li><b>Site check</b>A single page or a whole website, results streamed to your screen. No account needed.</li>
+    <li><b>Multi check</b>Up to 20 sites in one batch, combined report by email. Free account.</li>
+    <li><b>Auto check</b>Scheduled daily, weekly or monthly scans with emailed and online reports. Paid plans.</li>
+  </ul>
+
+  <h2>What gets detected</h2>
+  <ul>
+    <li>Error statuses: 404 Not Found, 410 Gone, 403 Forbidden, 500 Internal Server Error and every other 4xx/5xx answer.</li>
+    <li>Unreachable servers: unknown hosts, refused or reset connections, timeouts, TLS certificate failures.</li>
+    <li>Redirect problems: loops, chains longer than 10 hops, redirects with no target, and redirects that end in an error. Each hop is listed.</li>
+    <li>Malformed URLs, such as those containing backslashes.</li>
+  </ul>
+
+  <h2>Where links are found</h2>
+  <p>For every problem the report shows the page it was found on and how it appears there: the clickable text of an anchor, or the element and attribute it came from (for example <code>&lt;img src&gt;</code>). These attributes are scanned:</p>
+  <ul class="elements">
+    <li>a href</li><li>area href</li><li>applet codebase</li><li>audio src</li><li>blockquote cite</li><li>body background</li>
+    <li>button formaction</li><li>command icon</li><li>del cite</li><li>embed src</li><li>form action (GET)</li><li>frame src</li>
+    <li>frame longdesc</li><li>head profile</li><li>html manifest</li><li>iframe src</li><li>iframe longdesc</li><li>img src</li>
+    <li>img srcset</li><li>img longdesc</li><li>input src</li><li>input formaction</li><li>ins cite</li><li>link href</li>
+    <li>meta refresh</li><li>object classid</li><li>object codebase</li><li>object data</li><li>q cite</li><li>script src</li>
+    <li>source src</li><li>source srcset</li><li>track src</li><li>video poster</li><li>video src</li>
+  </ul>
+  <p>Plus every <code>url()</code> and <code>@import</code> inside same-site stylesheets, <code>&lt;style&gt;</code> blocks and inline <code>style</code> attributes. A <code>&lt;base href&gt;</code> is honoured when resolving relative links.</p>
+
+  <h2>Respectful crawling</h2>
+  <ul>
+    <li>robots.txt honoured for every host, including <code>Crawl-delay</code>.</li>
+    <li>At most two simultaneous requests per host, with a pause between requests.</li>
+    <li>Automatic slow-down and retry after 429 or 503 answers, honouring <code>Retry-After</code>.</li>
+    <li>Light <code>HEAD</code> requests for anything that doesn't need to be read, falling back to <code>GET</code> only when a server refuses <code>HEAD</code>.</li>
+    <li>Firm limits on depth, page count and link count for every scan.</li>
+  </ul>
+</section>

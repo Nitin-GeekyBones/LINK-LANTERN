@@ -1,0 +1,33 @@
+<section class="wrap page">
+  <h1>Account settings</h1>
+  <div class="panel">
+    <h2>Plan</h2>
+    <p id="plan-summary" class="muted">Loading…</p>
+    <p><a class="btn btn-ghost" href="/plans">Change plan</a></p>
+  </div>
+  <div class="split">
+    <form class="panel" id="email-form" novalidate>
+      <h2>Email address</h2>
+      <p class="small muted">Reports are only ever sent to this address.</p>
+      <div class="field"><label for="a-email">New email</label><input id="a-email" name="email" type="email" autocomplete="email" required></div>
+      <div class="field"><label for="a-email-pw">Current password</label><input id="a-email-pw" name="password" type="password" autocomplete="current-password" required></div>
+      <button class="btn" type="submit">Update email</button>
+      <p class="form-error" role="alert"></p>
+    </form>
+    <form class="panel" id="password-form" novalidate>
+      <h2>Password</h2>
+      <p class="small muted">Changing it logs you out everywhere else.</p>
+      <div class="field"><label for="a-cur">Current password</label><input id="a-cur" name="current" type="password" autocomplete="current-password" required></div>
+      <div class="field"><label for="a-new">New password</label><input id="a-new" name="password" type="password" autocomplete="new-password" minlength="8" required></div>
+      <button class="btn" type="submit">Change password</button>
+      <p class="form-error" role="alert"></p>
+    </form>
+  </div>
+  <form class="panel" id="delete-form" novalidate>
+    <h2>Delete account</h2>
+    <p>Removes your account, all saved reports and all schedules. This can't be undone.</p>
+    <div class="field"><label for="a-del-pw">Password</label><input id="a-del-pw" name="password" type="password" autocomplete="current-password" required></div>
+    <button class="btn btn-danger" type="submit">Delete my account</button>
+    <p class="form-error" role="alert"></p>
+  </form>
+</section>

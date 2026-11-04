@@ -1,0 +1,21 @@
+<section class="hero wrap">
+  <h1>Site check</h1>
+  <p class="lede">Check a whole website, following links up to 10 clicks deep from the address you enter, or check just the links on a single page.</p>
+  {{> checker}}
+</section>
+
+<section class="wrap section split">
+  <div>
+    <h2>How a site check works</h2>
+    <p>LinkLantern loads your starting page, collects every URL it references and tests each one. Pages on the same host are opened and searched for more links; links to other sites are tested but not explored further. A subdomain such as <code>blog.example.com</code> counts as a different site.</p>
+    <p>Each URL is tested once, however many times it appears, and the report lists every page it was found on. Addresses that differ only in their query string are treated as different pages.</p>
+    <p>Free checks stop after {{manualMaxLinks}} links. For bigger sites, <a href="/auto-check">Auto check</a> handles many thousands.</p>
+  </div>
+  <div class="panel">
+    <h3>Reading the results</h3>
+    <p><span class="pill broken">Broken</span> The link returned an error (4xx, 5xx) or could not be reached at all: timeout, unknown host, refused connection, redirect loop.</p>
+    <p><span class="pill redirect">Redirected</span> The link works but goes through one or more redirects. Updating it to the final address saves a round trip.</p>
+    <p><span class="pill skipped">Not checked</span> robots.txt asked us not to fetch it, or the scan was stopped first.</p>
+    <p class="small"><a href="/error-codes">What every code means</a></p>
+  </div>
+</section>

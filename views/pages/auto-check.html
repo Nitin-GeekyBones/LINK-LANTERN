@@ -1,0 +1,112 @@
+<section class="wrap page">
+  <h1>Auto check</h1>
+  <p class="lede">Put your websites on a schedule. LinkLantern scans them daily, weekly or monthly and emails you a report, so new broken links get spotted within days rather than months.</p>
+
+  <div data-guest-only>
+    <div class="split">
+      <div>
+        <h2>What you get</h2>
+        <ul class="facts">
+          <li><b>Hands-off scanning</b>Pick a site and a frequency once. Scans run whether or not you're logged in.</li>
+          <li><b>Big sites welcome</b>Scheduled scans check far more than the {{manualMaxLinks}}-link limit of a manual check, up to your monthly allowance.</li>
+          <li><b>Fine control</b>Ignore URL patterns, slow the crawl down, adjust timeouts, keep the scan inside one folder.</li>
+          <li><b>Quiet when all is well</b>Optionally skip the email when a scan finds nothing broken.</li>
+        </ul>
+      </div>
+      <div class="form-card">
+        <h2>Get started</h2>
+        <p>Create a free account, then choose a plan that includes Auto check.</p>
+        <p><a class="btn" href="/signup?next=/plans">Create account</a></p>
+        <p class="small">Already registered? <a href="/login?next=/auto-check">Log in</a> · <a href="/plans">Compare plans</a></p>
+      </div>
+    </div>
+  </div>
+
+  <div data-user-only>
+    <div class="banner warn" id="upgrade-note" hidden>
+      <p>Your current plan doesn't include scheduled scans. <a href="/plans">Choose a plan</a> to add sites here.</p>
+    </div>
+
+    <div class="panel" id="usage-panel">
+      <div class="split">
+        <div>
+          <h3>This month's allowance</h3>
+          <div class="meter" role="progressbar" aria-label="Links used this month" aria-valuemin="0" aria-valuemax="100"><div id="usage-bar"></div></div>
+          <p class="small muted" id="usage-text"></p>
+        </div>
+        <div>
+          <h3>Scheduled sites</h3>
+          <p class="small muted" id="sites-text"></p>
+          <button class="btn" id="add-schedule" type="button">Add a site</button>
+        </div>
+      </div>
+    </div>
+
+    <h2>Schedules</h2>
+    <div id="schedules"><p class="muted">Loading…</p></div>
+
+    <h2>Scans in progress</h2>
+    <div id="active-scans"><p class="muted">Loading…</p></div>
+  </div>
+</section>
+
+<dialog id="schedule-dialog" aria-labelledby="schedule-dialog-title">
+  <form id="schedule-form" method="dialog" novalidate>
+    <h2 id="schedule-dialog-title">Add a site</h2>
+    <input type="hidden" name="scheduleId">
+    <div class="field">
+      <label for="s-url">Website address</label>
+      <input id="s-url" name="url" type="text" inputmode="url" placeholder="example.com" required>
+      <p class="hint">Start from a folder (like <code>example.com/blog/</code>) and turn on "Stay inside this folder" to check part of a site.</p>
+    </div>
+    <div class="grid-2">
+      <div class="field">
+        <label for="s-frequency">How often</label>
+        <select id="s-frequency" name="frequency">
+          <option value="daily">Every day</option>
+          <option value="weekly" selected>Every week</option>
+          <option value="monthly">Every month</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="s-depth">Link depth</label>
+        <input id="s-depth" name="depth" type="number" min="0" max="20" value="10">
+      </div>
+    </div>
+    <div class="field">
+      <label for="s-next">Next scan</label>
+      <div class="grid-2">
+        <input id="s-next" name="nextRun" type="datetime-local">
+        <label class="check"><input type="checkbox" name="runNow" checked> Start as soon as I save</label>
+      </div>
+    </div>
+    <details class="advanced">
+      <summary>Advanced settings</summary>
+      <div class="field">
+        <label for="s-ignore">Ignore URLs containing</label>
+        <textarea id="s-ignore" name="ignore" placeholder="/cart/&#10;/login&#10;sort=&#10;?color="></textarea>
+        <p class="hint">One text fragment per line. Any URL containing one of them is skipped entirely. Useful for shopping carts, logins and filter parameters that multiply into thousands of near-identical pages.</p>
+      </div>
+      <div class="grid-2">
+        <div class="field">
+          <label for="s-interval">Minimum gap between requests (ms)</label>
+          <input id="s-interval" name="intervalMs" type="number" min="0" max="30000" step="100" value="0">
+          <p class="hint">Raise this if your server struggles. robots.txt Crawl-delay is always respected too.</p>
+        </div>
+        <div class="field">
+          <label for="s-timeout">Give up on a URL after (ms)</label>
+          <input id="s-timeout" name="timeoutMs" type="number" min="2000" max="60000" step="1000" value="15000">
+        </div>
+      </div>
+      <label class="check"><input type="checkbox" name="restrictToDir"> Stay inside this folder (only explore pages under the starting address)</label>
+      <label class="check"><input type="checkbox" name="overrideNofollow"> Follow nofollow links (explore pages linked with <code>rel="nofollow"</code> or marked <code>nofollow</code> in a robots meta tag)</label>
+      <label class="check"><input type="checkbox" name="suppressEmptyEmail"> Don't email me when a scan finds no problems</label>
+      <label class="check"><input type="checkbox" name="active" checked> Schedule is active</label>
+    </details>
+    <p class="form-error" role="alert"></p>
+    <div class="dialog-actions">
+      <button class="btn btn-ghost" type="button" data-close>Cancel</button>
+      <button class="btn" type="submit">Save schedule</button>
+    </div>
+  </form>
+</dialog>

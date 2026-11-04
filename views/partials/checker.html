@@ -1,0 +1,25 @@
+<form class="checker" id="checker" novalidate>
+  <div class="addressbar">
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
+    <label for="checker-url" class="visually-hidden">Website address to check</label>
+    <input id="checker-url" name="url" type="text" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="example.com" autocomplete="url" required>
+  </div>
+  <button class="btn go" type="submit">Check links</button>
+  <div class="checker-opts">
+    <fieldset class="seg">
+      <legend class="visually-hidden">What to check</legend>
+      <label><input type="radio" name="mode" value="site" checked><span>Whole website</span></label>
+      <label><input type="radio" name="mode" value="page"><span>Single page</span></label>
+    </fieldset>
+    <label class="check" data-user-only><input type="checkbox" name="emailWhenDone"> Email me the report when it's done</label>
+    <span class="small muted" data-guest-only>Up to {{manualMaxLinks}} links per check. No account needed.</span>
+  </div>
+  <div class="captcha" hidden>
+    <img alt="Security code" width="150" height="50">
+    <label for="captcha-answer" class="visually-hidden">Type the code shown</label>
+    <input id="captcha-answer" name="captchaAnswer" type="text" autocomplete="off" maxlength="8" placeholder="Code">
+    <button type="button" class="linkish small" data-new-captcha>New code</button>
+  </div>
+  <p class="form-error" role="alert"></p>
+</form>
+<section class="scan" id="scan" hidden aria-live="polite"></section>

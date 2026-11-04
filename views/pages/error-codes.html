@@ -1,0 +1,10 @@
+<section class="wrap page">
+  <h1>Status &amp; error codes</h1>
+  <p class="lede">A link is reported as broken when its server answers with an error status, or when no proper answer arrives at all. Here's what each result in a report means.</p>
+  <h2>Results without an HTTP status</h2>
+  <p>These come from LinkLantern itself when a request couldn't complete normally.</p>
+  <table class="defs"><tbody>{{customCodes}}</tbody></table>
+  <h2>HTTP status codes</h2>
+  <p>Any 2xx answer is a working link. 3xx answers are redirects: LinkLantern follows them (up to 10) and reports the final result along with each hop. 4xx and 5xx answers are broken links.</p>
+  {{httpCodes}}
+</section>
