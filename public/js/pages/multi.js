@@ -1,5 +1,5 @@
 // Multi check: submit a list of sites, then watch the batches.
-import { $, api, handleForm, html, raw, isUser, meta, num, when, host, stateBadge, toast } from '../common.js';
+import { $, api, handleForm, html, raw, isUser, isPaid, readChecklist, initSlackOption, meta, num, when, host, stateBadge, toast } from '../common.js';
 
 let pollTimer = null;
 
@@ -8,11 +8,15 @@ export async function init() {
   meta().then((m) => { const el = $('[data-limit=multiMaxSites]'); if (el) el.textContent = m.limits.multiMaxSites; });
 
   handleForm($('#multi-form'), async (data, form) => {
-    await api('/api/multi', { method: 'POST', body: { urls: data.urls, mode: data.mode } });
+    await api('/api/multi', {
+      method: 'POST',
+      body: { urls: data.urls, mode: data.mode, slack: !!data.slack, ...(isPaid() ? { checklist: readChecklist(data) } : {}) },
+    });
     form.reset();
     toast('Multi check started. We will email you when every site is done.');
     load();
   });
+  initSlackOption($('#multi-form'));
   load();
 }
 

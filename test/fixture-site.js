@@ -81,6 +81,19 @@ export function createFixtureServer() {
       case '/sub/': return send(200, page('Sub', '<a href="../">Up</a> <a href="/sub/child">Child</a>'));
       case '/sub/child': return send(200, page('Child', 'leaf'));
       case '/search': return send(200, page('Search', 'results'));
+      // pages for CAPTCHA detection and the content checklist (not linked from the home page)
+      case '/contact': return send(200, page('Contact', `
+          <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+          <h1>Contact us</h1>
+          <p>Call +1 (415) 555-0132 or write to hello@fixture.example. Prices from $1,299.00.</p>
+          <p>Lorem ipsum dolor sit amet. Published 2024-05-01, order 12345.</p>
+          <a href="mailto:sales@fixture.example">Sales</a> <a href="/sub/">Old Brand Name</a>
+          <form><div class="g-recaptcha" data-sitekey="6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"></div></form>
+          <footer>© 2019 Old Brand Name. oldbrand</footer>`));
+      case '/signup-v3': return send(200, page('Signup', `
+          <script src="https://www.google.com/recaptcha/api.js?render=6LdCrawlerTestSiteKeyAbcdefghijklmno"></script>
+          <script>grecaptcha.ready(() => grecaptcha.execute('6LdCrawlerTestSiteKeyAbcdefghijklmno', { action: 'signup' }));</script>
+          <p>No contact details here.</p>`));
       case '/style.css':
         return send(200, 'body{background:url(/img/bg-missing.png)} .x{background:url("/img/logo.png")}', { 'content-type': 'text/css' });
       case '/img/logo.png':

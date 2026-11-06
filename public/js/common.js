@@ -40,6 +40,37 @@ export function meta() {
 }
 
 export const isUser = () => document.body.dataset.auth === 'user';
+export const isPaid = () => document.body.dataset.plan === 'paid';
+
+/** Content checklist from the {{> checklist}} fields, or null when nothing is chosen. */
+export function readChecklist(d) {
+  const presets = Object.keys(d).filter((k) => k.startsWith('clp_') && d[k]).map((k) => k.slice(4));
+  const terms = String(d.cl_terms || '').split('\n').map((t) => t.trim()).filter(Boolean);
+  if (!presets.length && !terms.length) return null;
+  return { presets, terms, caseSensitive: !!d.cl_case, wholeWord: !!d.cl_word };
+}
+
+export function fillChecklist(form, cl) {
+  for (const el of form.querySelectorAll('[name^="clp_"]')) el.checked = !!cl?.presets?.includes(el.name.slice(4));
+  form.cl_terms.value = (cl?.terms || []).join('\n');
+  form.cl_case.checked = !!cl?.caseSensitive;
+  form.cl_word.checked = !!cl?.wholeWord;
+  const box = form.querySelector('details.checklist');
+  if (box) box.open = !!cl;
+}
+
+/** Disable "Send to Slack" (with a pointer to Account settings) until a webhook is saved. */
+export async function initSlackOption(root = document) {
+  const boxes = [...root.querySelectorAll('[data-slack-option]')];
+  if (!boxes.length || !isUser()) return;
+  const m = await meta().catch(() => null);
+  if (m?.user?.slackConfigured) return;
+  for (const box of boxes) {
+    box.disabled = true;
+    box.checked = false;
+    box.closest('label').insertAdjacentHTML('beforeend', ' <span class="small muted slack-hint">(<a href="/account#slack-form">connect Slack</a> first)</span>');
+  }
+}
 
 export function formData(form) {
   const out = {};

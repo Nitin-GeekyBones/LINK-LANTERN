@@ -1,5 +1,6 @@
 // Link extraction from HTML and CSS.
 import * as cheerio from 'cheerio';
+import { detectRecaptcha, pageText, findMatches } from './detect.js';
 
 // [tag, attribute] pairs whose values are URLs that should be verified.
 export const URL_ATTRIBUTES = [
@@ -55,9 +56,10 @@ function parseSrcset(srcset) {
 
 /**
  * Extract every checkable link from an HTML document.
- * @returns {{ links: Array<{raw, text, tag, attr, navigable, nofollow}>, base: string, pageNofollow: boolean, title: string }}
+ * Also detects reCAPTCHA and, when checklist `rules` are given, finds text matches.
+ * @returns {{ links: Array<{raw, text, tag, attr, navigable, nofollow}>, base: string, pageNofollow: boolean, title: string, captcha: object|null, matches: object[] }}
  */
-export function extractFromHtml(html, pageUrl, { agentToken = 'linklantern' } = {}) {
+export function extractFromHtml(html, pageUrl, { agentToken = 'linklantern', rules = [] } = {}) {
   const $ = cheerio.load(html);
   const links = [];
 
@@ -118,5 +120,8 @@ export function extractFromHtml(html, pageUrl, { agentToken = 'linklantern' } = 
   });
 
   const title = clip($('title').first().text(), 120);
-  return { links, base, pageNofollow, title };
+  const captcha = detectRecaptcha($);
+  let matches = [];
+  if (rules.length) { const { text, contacts } = pageText($); matches = findMatches(text, rules, contacts); }
+  return { links, base, pageNofollow, title, captcha, matches };
 }

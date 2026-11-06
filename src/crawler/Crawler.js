@@ -17,6 +17,9 @@ import { resolveLink, extractFromHtml, extractCssUrls } from './extract.js';
 import { fetchRobots, Robots } from './robots.js';
 import { HostThrottle, sleep } from './throttle.js';
 import { statusLabel, describeError } from './statusCodes.js';
+import { compileChecklist } from './detect.js';
+
+const MAX_TEXT_MATCHES = 5000;
 
 const RETRYABLE_ERRORS = new Set(['TIMEOUT', 'RESET']);
 const HTML_TYPE = /(text\/html|application\/xhtml\+xml)/i;
@@ -58,6 +61,7 @@ export class Crawler extends EventEmitter {
    * @param {number} o.intervalMs          minimum gap between requests to the scanned site
    * @param {boolean} o.overrideNofollow   crawl through rel=nofollow / meta nofollow
    * @param {boolean} o.restrictToDir      only crawl pages under the start URL's directory
+   * @param {object} [o.checklist]         normalized content checklist (see detect.js)
    * @param {object} o.http                client from createHttpClient()
    * @param {object} o.crawlerConfig       config.crawler
    */
@@ -78,12 +82,16 @@ export class Crawler extends EventEmitter {
     this.intervalMs = Math.max(o.intervalMs || 0, 0);
     this.overrideNofollow = !!o.overrideNofollow;
     this.restrictToDir = !!o.restrictToDir;
+    this.checklist = o.checklist || null;
+    this.rules = compileChecklist(this.checklist);
 
     this._setSite(this.startUrl);
 
     this.links = new Map();       // url -> record
     this.parsedPages = new Set(); // final URLs already parsed (several links may redirect to one page)
     this.ignored = new Set();
+    this.captchaPages = [];       // only pages where a CAPTCHA was found
+    this.textMatches = [];
     this.queue = [];
     this.waiters = [];
     this.inFlight = 0;
@@ -96,7 +104,7 @@ export class Crawler extends EventEmitter {
     this.state = 'idle';
     this.stats = {
       pagesScanned: 0, linksFound: 0, linksChecked: 0, ok: 0, broken: 0, redirected: 0,
-      skipped: 0, ignored: 0, limitReached: false, pageLimitReached: false,
+      skipped: 0, ignored: 0, captchaPages: 0, textMatches: 0, limitReached: false, pageLimitReached: false, matchLimitReached: false,
       startedAt: null, finishedAt: null, currentUrl: '',
     };
     this._lastProgress = 0;
@@ -187,10 +195,35 @@ export class Crawler extends EventEmitter {
     }));
   }
 
+  /** Page-level findings, serialisable. */
+  findings() {
+    return { captcha: this.captchaPages.slice(), matches: this.textMatches.slice() };
+  }
+
   // --------------------------------------------------------------- internal
   _resetCounters() {
-    Object.assign(this.stats, { pagesScanned: 0, linksFound: 0, linksChecked: 0, ok: 0, broken: 0, redirected: 0, skipped: 0 });
+    Object.assign(this.stats, { pagesScanned: 0, linksFound: 0, linksChecked: 0, ok: 0, broken: 0, redirected: 0, skipped: 0, captchaPages: 0, textMatches: 0 });
     this.pagesReserved = 0;
+    this.captchaPages = [];
+    this.textMatches = [];
+  }
+
+  _recordFindings(page, title, captcha, matches) {
+    if (captcha) {
+      const rec = { page, title, ...captcha };
+      this.captchaPages.push(rec);
+      this.stats.captchaPages = this.captchaPages.length;
+      this.emit('captcha', rec);
+    }
+    if (matches.length) {
+      const room = MAX_TEXT_MATCHES - this.textMatches.length;
+      if (room < matches.length) this.stats.matchLimitReached = true;
+      const add = matches.slice(0, Math.max(room, 0)).map((m) => ({ page, ...m }));
+      if (!add.length) return;
+      this.textMatches.push(...add);
+      this.stats.textMatches = this.textMatches.length;
+      this.emit('matches', add);
+    }
   }
 
   _newRecord(url, depth, invalid = false) {
@@ -359,8 +392,9 @@ export class Crawler extends EventEmitter {
     this.parsedPages.add(finalUrl);
     rec.isPage = true;
     this.stats.pagesScanned++;
-    const { links, base, pageNofollow, title } = extractFromHtml(r.body, finalUrl, { agentToken: this.c.userAgentToken });
+    const { links, base, pageNofollow, title, captcha, matches } = extractFromHtml(r.body, finalUrl, { agentToken: this.c.userAgentToken, rules: this.rules });
     rec.title = title;
+    this._recordFindings(finalUrl, title, captcha, matches);
     for (const link of links) this._discover(link, finalUrl, base, task.depth + 1, pageNofollow);
     this.emitProgress();
   }

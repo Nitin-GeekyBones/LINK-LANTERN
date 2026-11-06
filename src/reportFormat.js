@@ -1,4 +1,5 @@
-// Report exports: CSV (one row per link occurrence) and an HTML email body.
+// Report exports: CSV (links: one row per link occurrence; CAPTCHA pages;
+// checklist text matches) and an HTML email body.
 const csvCell = (v) => {
   const s = v === null || v === undefined ? '' : String(v);
   // neutralise spreadsheet formula injection
@@ -23,6 +24,28 @@ export function reportToCsv(report, { only = 'all' } = {}) {
   return `﻿${rows.join('\r\n')}\r\n`;
 }
 
+const toCsv = (header, rows) => `﻿${[header, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n')}\r\n`;
+
+/** Pages where a CAPTCHA was found. */
+export function captchaToCsv(report) {
+  return toCsv(['page', 'page_title', 'captcha', 'variant', 'site_key', 'evidence'],
+    (report.captcha || []).map((c) => [c.page, c.title, c.type === 'recaptcha' ? 'Google reCAPTCHA' : c.type, c.variant, c.siteKey, (c.evidence || []).join(' ')]));
+}
+
+/** Content checklist matches (one row per distinct match per page). */
+export function matchesToCsv(report) {
+  return toCsv(['page', 'rule', 'match', 'context'],
+    (report.matches || []).map((m) => [m.page, m.ruleLabel, m.match, m.snippet]));
+}
+
+/** Every CSV attachment worth sending for a finished report. */
+export function reportAttachments(report, name) {
+  const out = [{ filename: `${name}.csv`, content: reportToCsv(report, { only: 'problems' }) }];
+  if (report.captcha?.length) out.push({ filename: `${name}-captcha.csv`, content: captchaToCsv(report) });
+  if (report.matches?.length) out.push({ filename: `${name}-text-matches.csv`, content: matchesToCsv(report) });
+  return out;
+}
+
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 export function reportSummaryHtml(report, baseUrl, { maxRows = 200 } = {}) {
@@ -37,7 +60,7 @@ export function reportSummaryHtml(report, baseUrl, { maxRows = 200 } = {}) {
   const more = broken.length > maxRows ? `<p>…and ${broken.length - maxRows} more. See the full report online.</p>` : '';
   return `<div style="font-family:system-ui,sans-serif;max-width:760px">
 <h2 style="margin:0 0 4px">${esc(report.startUrl)}</h2>
-<p style="margin:0 0 12px;color:#555">${report.fatal ? esc(report.fatal) : `${s.pagesScanned || 0} pages scanned · ${s.linksChecked || 0} links checked · <b style="color:${s.broken ? '#b42318' : '#067647'}">${s.broken || 0} broken</b> · ${s.redirected || 0} redirected`}</p>
+<p style="margin:0 0 12px;color:#555">${report.fatal ? esc(report.fatal) : `${s.pagesScanned || 0} pages scanned · ${s.linksChecked || 0} links checked · <b style="color:${s.broken ? '#b42318' : '#067647'}">${s.broken || 0} broken</b> · ${s.redirected || 0} redirected${s.captchaPages ? ` · ${s.captchaPages} page(s) with reCAPTCHA` : ''}${s.textMatches ? ` · ${s.textMatches} checklist match(es)` : ''}`}</p>
 ${broken.length ? `<table style="border-collapse:collapse;width:100%;font-size:13px"><thead><tr><th align="left" style="padding:6px 8px;border-bottom:2px solid #ccc">Status</th><th align="left" style="padding:6px 8px;border-bottom:2px solid #ccc">URL</th><th align="left" style="padding:6px 8px;border-bottom:2px solid #ccc">Link text / page</th></tr></thead><tbody>${rows}</tbody></table>${more}` : (report.fatal ? '' : '<p>No broken links found. 🎉</p>')}
 <p><a href="${esc(baseUrl)}/report/${esc(report.id)}">Open the full report</a> · <a href="${esc(baseUrl)}/api/scans/${esc(report.id)}/export.csv">Download CSV</a></p>
 </div>`;

@@ -1,5 +1,5 @@
 // Auto check: manage schedules, watch scans in progress.
-import { $, $$, api, html, raw, isUser, num, when, host, stateBadge, toast, formData } from '../common.js';
+import { $, $$, api, html, raw, isUser, isPaid, num, when, host, stateBadge, toast, formData, readChecklist, fillChecklist, initSlackOption } from '../common.js';
 
 const FREQ = { daily: 'Every day', weekly: 'Every week', monthly: 'Every month' };
 let state = { schedules: [], limits: {}, active: [] };
@@ -25,6 +25,8 @@ export async function init() {
       url: d.url, frequency: d.frequency, depth: Number(d.depth), nextRun,
       ignore: d.ignore, intervalMs: Number(d.intervalMs), timeoutMs: Number(d.timeoutMs),
       restrictToDir: d.restrictToDir, overrideNofollow: d.overrideNofollow, suppressEmptyEmail: d.suppressEmptyEmail, active: d.active,
+      notifySlack: !!d.slack,
+      ...(isPaid() ? { checklist: readChecklist(d) } : {}),
     };
     try {
       if (d.scheduleId) await api(`/api/schedules/${d.scheduleId}`, { method: 'PUT', body });
@@ -34,6 +36,7 @@ export async function init() {
       load();
     } catch (ex) { err.textContent = ex.message; }
   });
+  initSlackOption(form);
   load();
 }
 
@@ -62,7 +65,9 @@ function openDialog(s = null) {
   form.overrideNofollow.checked = !!s?.overrideNofollow;
   form.suppressEmptyEmail.checked = !!s?.suppressEmptyEmail;
   form.active.checked = s ? s.active : true;
-  $('details.advanced', form).open = !!(s && (s.ignore?.length || s.intervalMs || s.restrictToDir || s.overrideNofollow || s.suppressEmptyEmail || !s.active));
+  if (!form.slack.disabled) form.slack.checked = !!s?.notifySlack;
+  fillChecklist(form, s?.checklist);
+  $('details.advanced', form).open = !!(s && (s.ignore?.length || s.intervalMs || s.restrictToDir || s.overrideNofollow || s.suppressEmptyEmail || s.notifySlack || !s.active));
   $('#schedule-dialog').showModal();
   form.url.focus();
 }
@@ -108,7 +113,7 @@ function renderSchedules() {
                <span class="small muted">${when(s.lastRunAt)}</span> ${raw(s.lastReportId ? html`<a class="small" href="/report/${s.lastReportId}">report</a>` : '')}`
         : s.lastError ? html`<span class="small form-error">${s.lastError}</span>` : html`<span class="muted small">Not run yet</span>`;
     return html`<tr>
-      <td class="url">${s.url}${raw(s.active ? '' : ' <span class="tag">paused</span>')}</td>
+      <td class="url">${s.url}${raw(s.active ? '' : ' <span class="tag">paused</span>')}${raw(s.notifySlack ? ' <span class="tag">Slack</span>' : '')}${raw(s.checklist ? ' <span class="tag">checklist</span>' : '')}</td>
       <td>${FREQ[s.frequency]}<br><span class="small muted">depth ${s.depth}</span></td>
       <td>${s.active ? when(s.nextRun) : '—'}</td>
       <td>${raw(lastCell)}</td>

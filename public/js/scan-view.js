@@ -9,6 +9,8 @@ const TABS = [
   ['redirect', 'Redirected'],
   ['skipped', 'Not checked'],
   ['all', 'All links'],
+  ['captcha', 'CAPTCHA pages'],
+  ['matches', 'Text matches'],
 ];
 const PAGE_SIZE = 300;
 
@@ -19,6 +21,8 @@ export class ScanView {
     this.onFinish = onFinish;
     this.compact = compact;
     this.links = new Map();
+    this.captcha = [];   // pages where reCAPTCHA was found
+    this.matches = [];   // content checklist matches
     this.tab = 'broken';
     this.query = '';
     this.limit = PAGE_SIZE;
@@ -52,6 +56,8 @@ export class ScanView {
     on('progress', (d) => { this.report.state = d.state; this.report.queuePosition = null; this.updateStats(d.stats); });
     on('queued', (d) => { this.report.queuePosition = d.position; this.updateHead(); });
     on('link', (l) => this.addLink(l));
+    on('captcha', (c) => { this.captcha.push(c); this.scheduleRender(); });
+    on('matches', (list) => { this.matches.push(...list); this.scheduleRender(); });
     on('done', async (d) => {
       es.close();
       Object.assign(this.report, { state: d.state, fatal: d.fatal, stats: d.stats });
@@ -69,6 +75,8 @@ export class ScanView {
       const data = await api(`/api/scans/${encodeURIComponent(this.id)}`);
       this.report = data.report;
       this.links = new Map(data.report.links.map((l) => [l.url, l]));
+      this.captcha = data.report.captcha || [];
+      this.matches = data.report.matches || [];
       this.complete = true;
       if (data.live && !this.es) this.connect();
     } catch (err) {
@@ -81,9 +89,15 @@ export class ScanView {
     this.links.set(l.url, l);
     this.ticker.push(l);
     if (this.ticker.length > 40) this.ticker.shift();
+    this.scheduleRender();
+  }
+
+  scheduleRender() {
     clearTimeout(this._renderTimer);
     this._renderTimer = setTimeout(() => { this.renderTicker(); this.renderTabs(); this.renderTable(); }, 250);
   }
+
+  hasChecklist() { return !!this.report.options?.checklist; }
 
   // ------------------------------------------------------------ rendering
   renderShell() {
@@ -136,6 +150,8 @@ export class ScanView {
       ? html`<button class="btn btn-ghost btn-small" data-stop>Stop scan</button>${raw(onReportPage ? '' : html`<a class="btn btn-ghost btn-small" href="/report/${this.id}">Open report page</a>`)}`
       : html`<a class="btn btn-small" href="${base}/export.csv" download>Download CSV</a>
              <a class="btn btn-ghost btn-small" href="${base}/export.csv?only=problems" download>Problems only (CSV)</a>
+             ${raw(this.captcha.length ? html`<a class="btn btn-ghost btn-small" href="${base}/export.csv?section=captcha" download>CAPTCHA pages (CSV)</a>` : '')}
+             ${raw(this.matches.length ? html`<a class="btn btn-ghost btn-small" href="${base}/export.csv?section=matches" download>Text matches (CSV)</a>` : '')}
              <a class="btn btn-ghost btn-small" href="${base}/export.json" download>JSON</a>
              ${raw(onReportPage ? '' : html`<a class="btn btn-ghost btn-small" href="/report/${this.id}">Report page</a>`)}`;
     $('[data-stop]', actions)?.addEventListener('click', async (e) => {
@@ -177,6 +193,7 @@ export class ScanView {
     const out = [];
     if (r.fatal) out.push(html`<div class="banner error"><p><b>This check couldn't run.</b> ${r.fatal}</p><p class="small">Check the address and try again. If the site works in your browser, see <a href="/faq">why a site can look broken to a checker</a>.</p></div>`);
     if (s.limitReached) out.push(html`<div class="banner warn"><p>The check stopped collecting links at its limit of ${num(r.options?.maxLinks)}. Links beyond that weren't checked. ${raw(r.type === 'auto' ? '' : 'Scheduled scans on a <a href="/plans">paid plan</a> handle much larger sites.')}</p></div>`);
+    if (s.matchLimitReached) out.push(html`<div class="banner warn"><p>The content checklist stopped recording at ${num(s.textMatches)} matches. Narrow the checklist to see the rest.</p></div>`);
     if (s.pageLimitReached) out.push(html`<div class="banner warn"><p>Only the first ${num(r.options?.maxPages)} pages were opened and searched for links.</p></div>`);
     if (r.state === 'stopped') out.push(html`<div class="banner info"><p>This scan was stopped before it finished. Results below are partial.</p></div>`);
     if (r.state === 'done' && !r.fatal && !s.broken) out.push(html`<div class="banner good"><p><b>No broken links found.</b> ${num(s.linksChecked)} links on ${num(s.pagesScanned)} page${s.pagesScanned === 1 ? '' : 's'} all responded.</p></div>`);
@@ -185,19 +202,20 @@ export class ScanView {
 
   counts() {
     const s = this.report.stats || {};
+    const pages = { captcha: this.captcha.length, matches: this.matches.length };
     if (this.complete && !this.isLive()) {
       const c = { broken: 0, redirect: 0, skipped: 0, ok: 0 };
       for (const l of this.links.values()) c[l.result] = (c[l.result] || 0) + 1;
-      return { ...c, all: this.links.size };
+      return { ...c, all: this.links.size, ...pages };
     }
-    return { broken: s.broken || 0, redirect: s.redirected || 0, skipped: s.skipped || 0, all: s.linksFound || 0 };
+    return { broken: s.broken || 0, redirect: s.redirected || 0, skipped: s.skipped || 0, all: s.linksFound || 0, ...pages };
   }
 
   renderTabs() {
     const t = $('[data-tabs]', this.root);
     if (!t) return;
     const c = this.counts();
-    t.innerHTML = TABS.map(([id, label]) => html`<button type="button" data-tab="${id}" aria-pressed="${this.tab === id}">${label}<span class="n">${num(c[id])}</span></button>`).join('');
+    t.innerHTML = TABS.filter(([id]) => id !== 'matches' || this.hasChecklist()).map(([id, label]) => html`<button type="button" data-tab="${id}" aria-pressed="${this.tab === id}">${label}<span class="n">${num(c[id])}</span></button>`).join('');
     $$('[data-tab]', t).forEach((btn) => btn.addEventListener('click', async () => {
       this.tab = btn.dataset.tab;
       this.limit = PAGE_SIZE;
@@ -205,6 +223,14 @@ export class ScanView {
       this.renderTabs();
       this.renderTable();
     }));
+  }
+
+  filteredFindings() {
+    const q = this.query;
+    const list = this.tab === 'captcha' ? this.captcha : this.matches;
+    if (!q) return list;
+    return list.filter((f) => [f.page, f.title, f.variant, f.siteKey, f.ruleLabel, f.match, f.snippet]
+      .some((v) => String(v || '').toLowerCase().includes(q)));
   }
 
   filtered() {
@@ -222,6 +248,7 @@ export class ScanView {
   renderTable() {
     const wrap = $('[data-table]', this.root);
     if (!wrap) return;
+    if (this.tab === 'captcha' || this.tab === 'matches') { this.renderFindings(wrap); return; }
     const list = this.filtered();
     if (!list.length) {
       const msg = this.isLive()
@@ -237,6 +264,49 @@ export class ScanView {
       <thead><tr><th scope="col">Status</th><th scope="col">URL</th><th scope="col">Where it was found</th></tr></thead>
       <tbody>${raw(rows)}</tbody></table>${raw(more)}`;
     $('[data-more]', wrap)?.addEventListener('click', () => { this.limit += PAGE_SIZE; this.renderTable(); });
+  }
+
+  renderFindings(wrap) {
+    const captcha = this.tab === 'captcha';
+    const list = this.filteredFindings();
+    if (!list.length) {
+      const pages = num(this.report.stats?.pagesScanned);
+      const msg = this.query ? 'Nothing matches that filter.'
+        : captcha
+          ? (this.isLive() ? 'No reCAPTCHA found yet. Pages with one will appear here as they are scanned.' : `No Google reCAPTCHA found on the ${pages} scanned page(s).`)
+          : (this.isLive() ? 'No checklist matches yet.' : `None of the checklist items were found on the ${pages} scanned page(s).`);
+      wrap.innerHTML = html`<p class="empty">${msg}</p>`;
+      return;
+    }
+    const rows = list.slice(0, this.limit).map((f) => (captcha ? this.captchaRow(f) : this.matchRow(f))).join('');
+    const more = list.length > this.limit
+      ? html`<button class="btn btn-ghost btn-small show-more" type="button" data-more>Show ${num(Math.min(PAGE_SIZE, list.length - this.limit))} more of ${num(list.length - this.limit)}</button>` : '';
+    const head = captcha
+      ? '<th scope="col">Detected</th><th scope="col">Page</th><th scope="col">Details</th>'
+      : '<th scope="col">Checklist item</th><th scope="col">Found</th><th scope="col">Context and page</th>';
+    wrap.innerHTML = html`<table class="results"><thead><tr>${raw(head)}</tr></thead><tbody>${raw(rows)}</tbody></table>${raw(more)}`;
+    $('[data-more]', wrap)?.addEventListener('click', () => { this.limit += PAGE_SIZE; this.renderTable(); });
+  }
+
+  captchaRow(c) {
+    const how = { script: 'reCAPTCHA script', widget: 'widget element', iframe: 'challenge iframe', 'inline-script': 'grecaptcha call' };
+    return html`<tr>
+      <td><span class="pill captcha">reCAPTCHA ${c.variant}</span></td>
+      <td class="url"><a href="${c.page}" target="_blank" rel="noopener nofollow">${c.page}</a>${raw(c.title ? html`<span class="on-page tag">${c.title}</span>` : '')}</td>
+      <td class="src">${raw(c.siteKey ? html`Site key <code>${c.siteKey}</code><br>` : '')}<span class="small muted">Found via ${(c.evidence || []).map((e) => how[e] || e).join(', ')}</span></td>
+    </tr>`;
+  }
+
+  matchRow(m) {
+    const snippet = m.snippet || '';
+    const at = snippet.toLowerCase().indexOf(m.match.toLowerCase());
+    const context = at < 0 ? html`${snippet}`
+      : html`${snippet.slice(0, at)}<mark>${snippet.slice(at, at + m.match.length)}</mark>${snippet.slice(at + m.match.length)}`;
+    return html`<tr>
+      <td><span class="pill match">${m.ruleLabel}</span></td>
+      <td class="url">${m.match}</td>
+      <td class="src snippet">${raw(context)}<span class="on-page">on <a href="${m.page}" target="_blank" rel="noopener nofollow">${m.page}</a></span></td>
+    </tr>`;
   }
 
   row(l) {

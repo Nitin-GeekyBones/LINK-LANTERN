@@ -6,6 +6,10 @@ A self-hosted broken link checker with a web UI. It reproduces the feature set o
 - **Multi check** queues up to 20 sites, then emails one combined report when the last finishes. Requires a free account.
 - **Auto check** runs daily, weekly or monthly schedules with ignore lists, crawl interval, timeout, folder restriction, nofollow override and "don't email if clean". Requires a paid plan (demo billing included).
 - **Reports**: live progress over Server-Sent Events, filter by Broken / Redirected / Not checked / All, redirect chains hop by hop, every place a link appears, CSV and JSON downloads.
+- **CAPTCHA detection**: every scanned page is checked for Google reCAPTCHA (v2 checkbox, v2 invisible, v3, Enterprise). The report's *CAPTCHA pages* tab lists only pages where one was found, with the variant, site key and how it was spotted.
+- **Content checklist** (paid plans): search every scanned page for email addresses, phone numbers, prices, placeholder text, copyright notices and up to 20 words or phrases of your own. Matches appear in a *Text matches* tab with surrounding context.
+- **Slack**: connect an Incoming Webhook in Account settings, then tick "Send the report to Slack" on a site check, multi check or schedule.
+- **Exports**: links, CAPTCHA pages and text matches each download as CSV (and are attached to report emails); everything is in the JSON export.
 - **Accounts**: sign up, log in, password reset by email, change email and password, delete account, plan switching.
 
 ## Requirements
@@ -88,17 +92,20 @@ linklantern/
 │   ├── plans.js             Plan definitions and limits
 │   ├── scanManager.js       Queueing, concurrency limits, SSE streaming, persistence, email notifications
 │   ├── scheduler.js         Auto check scheduler (30 s tick, monthly quota checks)
-│   ├── reportFormat.js      CSV export and HTML email summaries
+│   ├── reportFormat.js      CSV exports (links, CAPTCHA pages, text matches) and HTML email summaries
+│   ├── slack.js             Slack webhook validation, Block Kit report messages, delivery
 │   └── crawler/
 │       ├── Crawler.js       The scan engine (BFS, depth/page/link limits, scope, retries)
 │       ├── http.js          HTTP client: manual redirects, loop detection, cookie jar, SSRF guard, timeouts
 │       ├── robots.js        RFC 9309 robots.txt parser and matcher, Crawl-delay
 │       ├── extract.js       Link extraction from HTML and CSS
+│       ├── detect.js        reCAPTCHA detection and content checklist matching
 │       ├── throttle.js      Per-host concurrency and pacing with adaptive back-off
 │       └── statusCodes.js   Labels for HTTP statuses and crawler error codes
 ├── views/
 │   ├── layout.html          Shared header, nav and footer
 │   ├── partials/checker.html  The URL form used on Home and Site check
+│   ├── partials/checklist.html  Content checklist fields (paid plans) used by every scan form
 │   └── pages/*.html         One template per page
 ├── public/
 │   ├── css/style.css
@@ -107,6 +114,7 @@ linklantern/
 └── test/
     ├── fixture-site.js      Local site with every kind of breakage
     ├── crawler.test.js      End-to-end crawler tests against the fixture
+    ├── features.test.js     CAPTCHA detection, content checklist, Slack and CSV export tests
     └── robots.test.js       Unit tests
 ```
 
@@ -135,6 +143,8 @@ linklantern/
 - Strict Content-Security-Policy (no inline scripts), `X-Frame-Options: DENY`, `nosniff`.
 - Rate limits on log-in, sign-up, password reset and scan creation; per-IP and per-account concurrency limits.
 - CSV export neutralises spreadsheet formula injection.
+- Content checklist terms are matched as literal text, never as user-supplied regular expressions, so a hostile pattern can't stall the crawler (ReDoS). Up to 25 distinct matches per rule per page and 5,000 per report are kept.
+- Slack webhook URLs must be `https://hooks.slack.com/…` (or `hooks.slack-gov.com`), and redirects are refused, so the webhook can't be pointed at internal addresses. The URL is never sent back to the browser.
 - Reports of logged-in users are visible only to their owner. Guest reports are reachable by their unguessable ID only.
 
 ## JSON API
@@ -145,18 +155,19 @@ All endpoints are under `/api`. Write requests need `Content-Type: application/j
 |---|---|---|
 | `GET /meta` | – | Plans, limits, error-code labels, current user. |
 | `GET /captcha` | – | `{required, id, image}` for guests. |
-| `POST /scans` | – | Start a site check: `{url, mode: "site"\|"page", captchaId, captchaAnswer, emailWhenDone}`. |
-| `GET /scans/:id` | owner/guest | Report with links (`?links=0` for summary only). Works while running. |
-| `GET /scans/:id/events` | owner/guest | SSE stream: `snapshot`, `queued`, `progress`, `link` (problems only), `done`. |
+| `POST /scans` | – | Start a site check: `{url, mode: "site"\|"page", captchaId, captchaAnswer, emailWhenDone, slack, checklist}`. `checklist` is `{presets: ["email","phone","price","placeholder","copyright"], terms: ["…"], caseSensitive, wholeWord}` and needs a paid plan (402 otherwise); `slack: true` needs a saved webhook. |
+| `GET /scans/:id` | owner/guest | Report with `links`, `captcha` and `matches` (`?links=0` for summary only). Works while running. |
+| `GET /scans/:id/events` | owner/guest | SSE stream: `snapshot`, `queued`, `progress`, `link` (problems only), `captcha`, `matches`, `done`. |
 | `POST /scans/:id/stop` | owner/guest | Stop a queued or running scan; partial results are kept. |
-| `GET /scans/:id/export.csv` | owner/guest | CSV, one row per occurrence (`?only=problems` to skip OK links). |
+| `GET /scans/:id/export.csv` | owner/guest | CSV, one row per occurrence (`?only=problems` to skip OK links). `?section=captcha` for CAPTCHA pages, `?section=matches` for content checklist matches. |
 | `GET /scans/:id/export.json` | owner/guest | Full report JSON. |
 | `GET /scans/active` | user | Your running scans. |
 | `GET /reports`, `DELETE /reports/:id` | user | Your saved reports. |
-| `POST /multi`, `GET /multi` | user | Start a batch `{urls: "a\nb", mode}`; list batches. |
-| `GET/POST /schedules`, `PUT/DELETE /schedules/:id`, `POST /schedules/:id/run` | user + paid plan | Auto check schedules. Body fields: `url, frequency, nextRun ("now" or ISO), depth, ignore, intervalMs, timeoutMs, restrictToDir, overrideNofollow, suppressEmptyEmail, active`. |
+| `POST /multi`, `GET /multi` | user | Start a batch `{urls: "a\nb", mode, slack, checklist}`; list batches. Slack gets one combined message per batch. |
+| `GET/POST /schedules`, `PUT/DELETE /schedules/:id`, `POST /schedules/:id/run` | user + paid plan | Auto check schedules. Body fields: `url, frequency, nextRun ("now" or ISO), depth, ignore, intervalMs, timeoutMs, restrictToDir, overrideNofollow, suppressEmptyEmail, active, notifySlack, checklist`. |
 | `POST /auth/signup`, `/auth/login`, `/auth/logout`, `/auth/forgot`, `/auth/reset` | – | Accounts. |
 | `GET /me`, `PUT /account/email`, `PUT /account/password`, `POST /account/plan`, `DELETE /account` | user | Account settings. |
+| `PUT /account/slack`, `POST /account/slack/test` | user | Save (`{webhookUrl}`; empty string removes it) or test the Slack webhook. |
 
 ## Behaviour decisions (where the reference was ambiguous)
 

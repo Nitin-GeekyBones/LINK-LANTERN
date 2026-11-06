@@ -1,18 +1,20 @@
 // Owns every scan: queueing, concurrency limits, live progress streaming
-// (Server-Sent Events), persistence of finished reports and email delivery.
+// (Server-Sent Events), persistence of finished reports, email and Slack delivery.
 import { Crawler } from './crawler/Crawler.js';
 import { newId } from './store.js';
-import { reportSummaryHtml, reportToCsv } from './reportFormat.js';
+import { reportSummaryHtml, reportAttachments } from './reportFormat.js';
+import { buildSlackMessage } from './slack.js';
 
 export class ScanError extends Error {
   constructor(message, status = 400) { super(message); this.status = status; }
 }
 
 export class ScanManager {
-  constructor({ store, config, mailer, http }) {
+  constructor({ store, config, mailer, http, slack }) {
     this.store = store;
     this.config = config;
     this.mailer = mailer;
+    this.slack = slack;
     this.http = http;
     this.live = new Map();   // id -> { report, crawler, subscribers:Set, ip }
     this.queue = [];         // ids waiting to start
@@ -50,7 +52,7 @@ export class ScanManager {
    * Create and enqueue a scan. `limits` must already reflect the user's plan.
    * @returns the report meta (no links)
    */
-  createScan({ owner = null, ip, type = 'site', url, mode = 'site', limits, options = {}, scheduleId = null, batchId = null, emailWhenDone = false, skipActiveCheck = false }) {
+  createScan({ owner = null, ip, type = 'site', url, mode = 'site', limits, options = {}, scheduleId = null, batchId = null, emailWhenDone = false, slack = false, checklist = null, skipActiveCheck = false }) {
     if (!skipActiveCheck) {
       const max = owner ? this.config.scans.userConcurrent : this.config.scans.guestConcurrent;
       if (this.activeFor({ owner, ip }) >= max) {
@@ -70,14 +72,15 @@ export class ScanManager {
       intervalMs: options.intervalMs,
       overrideNofollow: options.overrideNofollow,
       restrictToDir: options.restrictToDir,
+      checklist,
       http: this.http,
       crawlerConfig: this.config.crawler,
     }); // throws on an invalid URL
     const report = {
       id: newId(12), owner, type, mode, startUrl: crawler.startUrl,
-      options: { depth: crawler.maxDepth, maxLinks: crawler.maxLinks, maxPages: crawler.maxPages, ignore: crawler.ignore, timeoutMs: crawler.timeoutMs, intervalMs: crawler.intervalMs, overrideNofollow: crawler.overrideNofollow, restrictToDir: crawler.restrictToDir },
+      options: { depth: crawler.maxDepth, maxLinks: crawler.maxLinks, maxPages: crawler.maxPages, ignore: crawler.ignore, timeoutMs: crawler.timeoutMs, intervalMs: crawler.intervalMs, overrideNofollow: crawler.overrideNofollow, restrictToDir: crawler.restrictToDir, checklist: crawler.checklist },
       state: 'queued', createdAt: new Date().toISOString(), startedAt: null, finishedAt: null,
-      stats: { ...crawler.stats }, fatal: null, scheduleId, batchId, emailWhenDone: !!emailWhenDone, links: [],
+      stats: { ...crawler.stats }, fatal: null, scheduleId, batchId, emailWhenDone: !!emailWhenDone, slack: !!slack, links: [], captcha: [], matches: [],
     };
     this.store.upsertReportIndex(report);
     this.live.set(report.id, { report, crawler, subscribers: new Set(), ip });
@@ -87,7 +90,7 @@ export class ScanManager {
   }
 
   meta(report) {
-    const { links, ...m } = report; // eslint-disable-line no-unused-vars
+    const { links, captcha, matches, ...m } = report; // eslint-disable-line no-unused-vars
     return m;
   }
 
@@ -121,6 +124,8 @@ export class ScanManager {
     crawler.on('link', (l) => {
       if (l.result !== 'ok') this._broadcast(report.id, 'link', l);
     });
+    crawler.on('captcha', (c) => this._broadcast(report.id, 'captcha', c));
+    crawler.on('matches', (list) => this._broadcast(report.id, 'matches', list));
     crawler.run()
       .then((snap) => this._finish(entry, snap))
       .catch((err) => {
@@ -137,6 +142,7 @@ export class ScanManager {
     report.stats = { ...snap.stats };
     report.finishedAt = new Date().toISOString();
     report.links = crawler.results();
+    Object.assign(report, crawler.findings());
     this.store.saveReport(report);
     if (report.owner) this.store.addUsage(report.owner, report.stats.linksChecked || 0);
     this._broadcast(report.id, 'done', { state: report.state, fatal: report.fatal, stats: report.stats });
@@ -167,12 +173,12 @@ export class ScanManager {
       const meta = this.meta(e.report);
       meta.stats = { ...e.crawler.stats, queued: e.crawler.queue.length, inFlight: e.crawler.inFlight };
       meta.queuePosition = e.report.state === 'queued' ? this.queue.indexOf(id) + 1 : null;
-      if (withLinks) meta.links = e.crawler.results();
+      if (withLinks) Object.assign(meta, { links: e.crawler.results() }, e.crawler.findings());
       return meta;
     }
     const r = this.store.loadReport(id);
     if (!r) return null;
-    if (!withLinks) delete r.links;
+    if (!withLinks) { delete r.links; delete r.captcha; delete r.matches; }
     return r;
   }
 
@@ -209,6 +215,9 @@ export class ScanManager {
     for (const l of e.crawler.results()) {
       if (l.result !== 'ok' && l.result !== 'pending') send('link', { ...l, occurrences: l.occurrences.slice(0, 5) });
     }
+    const found = e.crawler.findings();
+    for (const c of found.captcha) send('captcha', c);
+    if (found.matches.length) send('matches', found.matches);
     e.subscribers.add(res);
     const ping = setInterval(() => res.write(': ping\n\n'), 15000);
     res.on('close', () => { clearInterval(ping); e.subscribers.delete(res); });
@@ -226,6 +235,7 @@ export class ScanManager {
     const base = this.config.baseUrl;
     const owner = report.owner ? this.store.getUser(report.owner) : null;
     if (!owner) return;
+    const host = (r) => new URL(r.startUrl).hostname;
 
     if (report.type === 'auto' && report.scheduleId) {
       const sched = this.store.getSchedule(report.scheduleId);
@@ -238,12 +248,15 @@ export class ScanManager {
         });
         const quiet = sched.suppressEmptyEmail && !report.fatal && !report.stats.broken;
         if (!quiet && report.state !== 'stopped') {
-          await this.mailer.send({
-            to: owner.email,
-            subject: `Auto check: ${report.stats.broken || 0} broken link(s) on ${new URL(report.startUrl).hostname}`,
-            html: reportSummaryHtml(report, base),
-            attachments: [{ filename: `linklantern-${report.id}.csv`, content: reportToCsv(report, { only: 'problems' }) }],
-          });
+          await Promise.all([
+            this.mailer.send({
+              to: owner.email,
+              subject: `Auto check: ${report.stats.broken || 0} broken link(s) on ${host(report)}`,
+              html: reportSummaryHtml(report, base),
+              attachments: reportAttachments(report, `linklantern-${report.id}`),
+            }),
+            report.slack && this._toSlack(owner, [report]),
+          ]);
         }
       }
       return;
@@ -258,22 +271,38 @@ export class ScanManager {
       this.store.updateBatch(batch.id, { state: 'done', finishedAt: new Date().toISOString(), emailedAt: new Date().toISOString() });
       const full = batch.reportIds.map((id) => this.store.loadReport(id)).filter(Boolean);
       const totalBroken = full.reduce((n, r) => n + (r.stats.broken || 0), 0);
-      await this.mailer.send({
-        to: owner.email,
-        subject: `Multi check finished: ${totalBroken} broken link(s) across ${full.length} site(s)`,
-        html: full.map((r) => reportSummaryHtml(r, base, { maxRows: 100 })).join('<hr style="margin:24px 0">'),
-        attachments: full.map((r) => ({ filename: `linklantern-${new URL(r.startUrl).hostname}-${r.id}.csv`, content: reportToCsv(r, { only: 'problems' }) })),
-      });
+      await Promise.all([
+        this.mailer.send({
+          to: owner.email,
+          subject: `Multi check finished: ${totalBroken} broken link(s) across ${full.length} site(s)`,
+          html: full.map((r) => reportSummaryHtml(r, base, { maxRows: 100 })).join('<hr style="margin:24px 0">'),
+          attachments: full.flatMap((r) => reportAttachments(r, `linklantern-${host(r)}-${r.id}`)),
+        }),
+        batch.slack && this._toSlack(owner, full),
+      ]);
       return;
     }
 
-    if (report.emailWhenDone && report.state !== 'stopped') {
-      await this.mailer.send({
+    if (report.state === 'stopped') return;
+    await Promise.all([
+      report.emailWhenDone && this.mailer.send({
         to: owner.email,
-        subject: `Site check finished: ${report.stats.broken || 0} broken link(s) on ${new URL(report.startUrl).hostname}`,
+        subject: `Site check finished: ${report.stats.broken || 0} broken link(s) on ${host(report)}`,
         html: reportSummaryHtml(report, base),
-        attachments: [{ filename: `linklantern-${report.id}.csv`, content: reportToCsv(report, { only: 'problems' }) }],
-      });
+        attachments: reportAttachments(report, `linklantern-${report.id}`),
+      }),
+      report.slack && this._toSlack(owner, [report]),
+    ]);
+  }
+
+  /** Post to the owner's Slack webhook. Failures are logged, never thrown. */
+  async _toSlack(owner, reports) {
+    if (!owner.slackWebhookUrl || !this.slack) return;
+    try {
+      await this.slack.post(owner.slackWebhookUrl, buildSlackMessage(reports, this.config.baseUrl));
+      console.log(`[slack] posted report(s) ${reports.map((r) => r.id).join(', ')}`);
+    } catch (err) {
+      console.error(`[slack] delivery failed for ${owner.id}: ${err.message}`);
     }
   }
 }

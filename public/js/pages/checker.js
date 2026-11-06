@@ -1,5 +1,5 @@
 // Home page and Site check page: the URL form + inline live results.
-import { $, api, handleForm, isUser } from '../common.js';
+import { $, api, handleForm, isUser, isPaid, readChecklist, initSlackOption } from '../common.js';
 import { ScanView } from '../scan-view.js';
 
 let current = null;
@@ -23,6 +23,7 @@ export async function init() {
   }
   $('[data-new-captcha]', form).addEventListener('click', newCaptcha);
   newCaptcha();
+  initSlackOption(form);
 
   function show(id) {
     current?.stop();
@@ -39,7 +40,11 @@ export async function init() {
     try {
       res = await api('/api/scans', {
         method: 'POST',
-        body: { url: data.url, mode: data.mode, captchaId, captchaAnswer: data.captchaAnswer, emailWhenDone: !!data.emailWhenDone },
+        body: {
+          url: data.url, mode: data.mode, captchaId, captchaAnswer: data.captchaAnswer, emailWhenDone: !!data.emailWhenDone,
+          ...(isUser() ? { slack: !!data.slack } : {}),
+          ...(isPaid() ? { checklist: readChecklist(data) } : {}),
+        },
       });
     } catch (err) {
       newCaptcha(); // codes are single-use

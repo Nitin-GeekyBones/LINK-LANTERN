@@ -23,6 +23,18 @@
       <p class="form-error" role="alert"></p>
     </form>
   </div>
+  <form class="panel" id="slack-form" novalidate>
+    <h2>Slack</h2>
+    <p class="small muted">Create an <a href="https://api.slack.com/messaging/webhooks" target="_blank" rel="noopener">Incoming Webhook</a> for the channel that should get reports, and paste its URL here. Then tick "Send the report to Slack" on any check or schedule.</p>
+    <p id="slack-status" class="small"></p>
+    <div class="field"><label for="a-slack">Webhook URL</label><input id="a-slack" name="webhookUrl" type="url" placeholder="https://hooks.slack.com/services/…" autocomplete="off" spellcheck="false"></div>
+    <div class="row-actions">
+      <button class="btn" type="submit">Save webhook</button>
+      <button class="btn btn-ghost" type="button" data-slack-test>Send a test message</button>
+      <button class="btn btn-ghost" type="button" data-slack-remove>Remove</button>
+    </div>
+    <p class="form-error" role="alert"></p>
+  </form>
   <form class="panel" id="delete-form" novalidate>
     <h2>Delete account</h2>
     <p>Removes your account, all saved reports and all schedules. This can't be undone.</p>

@@ -82,5 +82,5 @@ export function createAuth({ store, config }) {
 // Public projection of a user record (never expose password hash).
 export function publicUser(u) {
   if (!u) return null;
-  return { id: u.id, email: u.email, plan: u.plan, billingCycle: u.billingCycle, createdAt: u.createdAt };
+  return { id: u.id, email: u.email, plan: u.plan, billingCycle: u.billingCycle, createdAt: u.createdAt, slackConfigured: !!u.slackWebhookUrl };
 }

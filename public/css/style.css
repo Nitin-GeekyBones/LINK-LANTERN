@@ -285,6 +285,27 @@ details.advanced summary { cursor: pointer; font-weight: 700; margin-bottom: 12p
 /* server-rendered auth state decides what's visible */
 body[data-auth="guest"] [data-user-only], body[data-auth="user"] [data-guest-only] { display: none !important; }
 
+/* paid-plan-only controls (content checklist) */
+body:not([data-plan="paid"]) [data-paid-only] { display: none !important; }
+.checker { grid-template-areas: "url go" "opts opts" "extras extras" "captcha captcha" "err err"; }
+.checker-extras { grid-area: extras; }
+details.checklist { border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 14px; margin: 4px 0 16px; background: var(--surface); }
+.checker details.checklist { margin: 0; }
+details.checklist summary { cursor: pointer; font-weight: 700; }
+details.checklist[open] summary { margin-bottom: 12px; }
+details.checklist fieldset { border: 0; padding: 0; margin: 0 0 8px; }
+details.checklist legend { font-weight: 700; margin-bottom: 8px; padding: 0; }
+.presets { display: flex; flex-wrap: wrap; gap: 0 22px; }
+details.checklist textarea { min-height: 5em; }
+.check .slack-hint { font-weight: 400; }
+.pill.captcha { background: var(--lantern-soft); color: var(--ink); }
+.pill.match { background: var(--surface-2); color: var(--ink); }
+.results td.snippet { min-width: 260px; font-size: .9rem; }
+.results mark { background: var(--lantern-soft); color: inherit; padding: 0 2px; border-radius: 3px; box-shadow: inset 0 -2px 0 var(--lantern); }
+@media (max-width: 640px) {
+  .checker { grid-template-areas: "url" "opts" "extras" "captcha" "go" "err"; }
+}
+
 /* results table becomes stacked cards on narrow screens */
 @media (max-width: 720px) {
   table.results thead { display: none; }

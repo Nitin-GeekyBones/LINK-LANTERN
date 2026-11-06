@@ -119,7 +119,7 @@ export class Store {
 
   // ---------- reports ----------
   static indexEntry(r) {
-    const { links, ...meta } = r; // eslint-disable-line no-unused-vars
+    const { links, captcha, matches, ...meta } = r; // eslint-disable-line no-unused-vars
     return meta;
   }
   saveReport(report) {

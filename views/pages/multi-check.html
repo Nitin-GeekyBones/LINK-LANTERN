@@ -29,6 +29,8 @@
         <label><input type="radio" name="mode" value="site" checked><span>Whole websites</span></label>
         <label><input type="radio" name="mode" value="page"><span>Single pages</span></label>
       </fieldset>
+      <label class="check"><input type="checkbox" name="slack" data-slack-option> Also send the combined report to Slack</label>
+      {{> checklist}}
       <p><button class="btn" type="submit">Start multi check</button></p>
       <p class="form-error" role="alert"></p>
     </form>

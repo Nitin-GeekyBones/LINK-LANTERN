@@ -12,8 +12,10 @@ import { ERROR_CODES, HTTP_STATUS } from './crawler/statusCodes.js';
 import { ScanManager, ScanError } from './scanManager.js';
 import { startScheduler, startSchedule, nextAfterNow } from './scheduler.js';
 import { PLANS, getPlan } from './plans.js';
-import { reportToCsv } from './reportFormat.js';
+import { reportToCsv, captchaToCsv, matchesToCsv } from './reportFormat.js';
 import { newId } from './store.js';
+import { normalizeChecklist, CHECKLIST_PRESETS } from './crawler/detect.js';
+import { createSlack, validateWebhookUrl, buildSlackMessage } from './slack.js';
 
 // ------------------------------------------------------------------ wiring
 const store = new Store(config.dataDir);
@@ -24,7 +26,8 @@ const http = createHttpClient({
   maxBodyBytes: config.crawler.maxBodyBytes,
   maxRedirects: config.crawler.maxRedirects,
 });
-const scans = new ScanManager({ store, config, mailer, http });
+const slack = createSlack();
+const scans = new ScanManager({ store, config, mailer, http, slack });
 const auth = createAuth({ store, config });
 const captcha = createCaptcha();
 
@@ -70,7 +73,31 @@ function limitsFor(user) {
     monthlyLinks: plan.monthlyLinks,
     usedThisMonth: user ? store.getUsage(user.id) : 0,
     multiMaxSites: config.scans.multiMaxSites,
+    checklist: !!plan.checklist,
   };
+}
+
+/**
+ * Validate the optional checklist / Slack settings sent with a scan or schedule.
+ * The content checklist needs a paid plan; Slack needs a saved webhook.
+ */
+function scanExtras(user, body, existing = {}) {
+  const fail = (message, status = 400) => { const e = new ScanError(message, status); e.field = 'extras'; throw e; };
+  // Only settings sent in this request are enforced; ones carried over from an
+  // existing schedule are kept as they are (e.g. pausing it still works after
+  // the Slack webhook was removed - the scheduler skips Slack then).
+  if (body.checklist === undefined && body.slack === undefined) return { checklist: existing.checklist || null, slack: !!existing.slack };
+  let checklist = existing.checklist || null;
+  if (body.checklist !== undefined) {
+    try { checklist = normalizeChecklist(body.checklist); } catch (err) { fail(err.message); }
+    if (checklist && !getPlan(user?.plan).checklist) fail('The content checklist is part of the paid plans. Choose one on the Plans page.', 402);
+  }
+  let slackOn = !!existing.slack;
+  if (body.slack !== undefined) {
+    slackOn = !!body.slack;
+    if (slackOn && !user?.slackWebhookUrl) fail('Add a Slack webhook in Account settings before sending reports to Slack.');
+  }
+  return { checklist, slack: slackOn };
 }
 
 // ------------------------------------------------------------------ app
@@ -126,6 +153,7 @@ app.get('/api/meta', (req, res) => {
     userAgent: config.crawler.userAgent,
     errorCodes: ERROR_CODES,
     httpStatus: HTTP_STATUS,
+    checklistPresets: Object.entries(CHECKLIST_PRESETS).map(([id, p]) => ({ id, label: p.label })),
   });
 });
 
@@ -225,6 +253,30 @@ app.post('/api/account/plan', auth.requireUser, (req, res) => {
   res.json({ user: publicUser(u), limits: limitsFor(u) });
 });
 
+app.put('/api/account/slack', auth.requireUser, (req, res) => {
+  const raw = String(req.body.webhookUrl || '').trim();
+  let url = null;
+  if (raw) {
+    try { url = validateWebhookUrl(raw); } catch (err) { return res.status(400).json({ error: err.message }); }
+  }
+  const u = store.updateUser(req.user.id, { slackWebhookUrl: url });
+  res.json({ user: publicUser(u) });
+});
+
+app.post('/api/account/slack/test', auth.requireUser, ah(async (req, res) => {
+  if (!req.user.slackWebhookUrl) return res.status(400).json({ error: 'Save a Slack webhook URL first.' });
+  if (!authLimit(`slack-test:${req.user.id}`)) return res.status(429).json({ error: 'Too many test messages. Try again later.' });
+  try {
+    await slack.post(req.user.slackWebhookUrl, {
+      text: 'LinkLantern is connected to this channel.',
+      blocks: [{ type: 'section', text: { type: 'mrkdwn', text: ':white_check_mark: *LinkLantern is connected.* Reports you send to Slack will appear in this channel.' } }],
+    });
+  } catch (err) {
+    return res.status(502).json({ error: `Slack didn't accept the test message (${err.message}).` });
+  }
+  res.json({ ok: true });
+}));
+
 app.delete('/api/account', auth.requireUser, ah(async (req, res) => {
   if (!await verifyPassword(String(req.body.password || ''), req.user.passwordHash)) return res.status(401).json({ error: 'Password is incorrect.' });
   for (const e of scans.listActive(req.user.id)) scans.stop(e.id);
@@ -244,16 +296,18 @@ app.post('/api/scans', (req, res) => {
     return res.status(429).json({ error: 'You have started a lot of scans recently. Please wait a while before starting another.' });
   }
   try {
+    const extras = scanExtras(user, req.body);
     const report = scans.createScan({
       owner: user?.id || null, ip, type: 'site',
       url: req.body.url, mode: req.body.mode === 'page' ? 'page' : 'site',
       limits: { maxLinks: config.scans.manualMaxLinks, maxPages: config.scans.manualMaxPages },
       options: { depth: config.crawler.defaultDepth },
       emailWhenDone: !!(user && req.body.emailWhenDone),
+      ...extras,
     });
     res.status(201).json({ id: report.id, report });
   } catch (err) {
-    res.status(err.status || 400).json({ error: err.message, field: err instanceof ScanError ? undefined : 'url' });
+    res.status(err.status || 400).json({ error: err.message, field: err.field || (err instanceof ScanError ? undefined : 'url') });
   }
 });
 
@@ -291,8 +345,13 @@ app.get('/api/scans/:id/export.:fmt', (req, res) => {
   const host = (() => { try { return new URL(r.startUrl).hostname; } catch { return 'site'; } })();
   const date = (r.finishedAt || r.createdAt || '').slice(0, 10);
   if (req.params.fmt === 'csv') {
+    // ?section=links (default) | captcha | matches
+    const section = ['captcha', 'matches'].includes(req.query.section) ? req.query.section : 'links';
+    const suffix = { links: '', captcha: '-captcha', matches: '-text-matches' }[section];
     res.set('content-type', 'text/csv; charset=utf-8');
-    res.set('content-disposition', `attachment; filename="linklantern-${host}-${date}.csv"`);
+    res.set('content-disposition', `attachment; filename="linklantern-${host}-${date}${suffix}.csv"`);
+    if (section === 'captcha') return res.send(captchaToCsv(r));
+    if (section === 'matches') return res.send(matchesToCsv(r));
     return res.send(reportToCsv(r, { only: req.query.only === 'problems' ? 'problems' : 'all' }));
   }
   if (req.params.fmt === 'json') {
@@ -324,14 +383,17 @@ app.post('/api/multi', auth.requireUser, (req, res) => {
   const bad = [];
   for (const u of urls) { try { normalizeStartUrl(u); } catch (e) { bad.push(`${u}: ${e.message}`); } }
   if (bad.length) return res.status(400).json({ error: `Please fix these addresses:\n${bad.join('\n')}` });
+  let extras;
+  try { extras = scanExtras(req.user, req.body); } catch (err) { return res.status(err.status || 400).json({ error: err.message }); }
   if (!userScanLimit(req.user.id)) return res.status(429).json({ error: 'Too many scans started recently. Please wait a while.' });
-  const batch = { id: newId(9), owner: req.user.id, createdAt: new Date().toISOString(), state: 'running', reportIds: [], mode: req.body.mode === 'page' ? 'page' : 'site' };
+  const batch = { id: newId(9), owner: req.user.id, createdAt: new Date().toISOString(), state: 'running', reportIds: [], mode: req.body.mode === 'page' ? 'page' : 'site', slack: extras.slack };
   store.addBatch(batch);
   for (const url of urls) {
     const r = scans.createScan({
       owner: req.user.id, ip: req.ip, type: 'multi', url, mode: batch.mode, batchId: batch.id, skipActiveCheck: true,
       limits: { maxLinks: config.scans.manualMaxLinks, maxPages: config.scans.manualMaxPages },
       options: { depth: config.crawler.defaultDepth },
+      checklist: extras.checklist, // Slack goes out once per batch, not per site
     });
     batch.reportIds.push(r.id);
   }
@@ -349,7 +411,7 @@ app.get('/api/multi', auth.requireUser, (req, res) => {
 
 // ------------------------------------------------------------------ auto check schedules
 const FREQS = new Set(['daily', 'weekly', 'monthly']);
-function parseSchedule(body, existing = {}) {
+function parseSchedule(user, body, existing = {}) {
   const out = {};
   if (body.url !== undefined || !existing.url) {
     // Validate, but keep a scheme-less address as typed so each run can fall
@@ -376,6 +438,9 @@ function parseSchedule(body, existing = {}) {
   out.timeoutMs = Math.min(Math.max(parseInt(timeout, 10) || config.crawler.timeoutMs, 2000), config.crawler.maxTimeoutMs);
   for (const k of ['overrideNofollow', 'suppressEmptyEmail', 'restrictToDir']) out[k] = !!(body[k] ?? existing[k] ?? false);
   out.active = body.active === undefined ? (existing.active ?? true) : !!body.active;
+  const extras = scanExtras(user, { checklist: body.checklist, slack: body.notifySlack }, { checklist: existing.checklist, slack: existing.notifySlack });
+  out.checklist = extras.checklist;
+  out.notifySlack = extras.slack;
   return out;
 }
 
@@ -391,22 +456,22 @@ app.post('/api/schedules', auth.requireUser, (req, res) => {
     return res.status(409).json({ error: `Your ${plan.name} plan allows ${plan.autoSites} scheduled site(s). Upgrade or remove one first.` });
   }
   try {
-    const s = { id: newId(9), owner: req.user.id, createdAt: new Date().toISOString(), ...parseSchedule(req.body) };
+    const s = { id: newId(9), owner: req.user.id, createdAt: new Date().toISOString(), ...parseSchedule(req.user, req.body) };
     store.addSchedule(s);
     if (Date.parse(s.nextRun) <= Date.now() + 1000) scheduler.tick();
     res.status(201).json({ schedule: store.getSchedule(s.id) });
-  } catch (err) { res.status(400).json({ error: err.message }); }
+  } catch (err) { res.status(err.status || 400).json({ error: err.message }); }
 });
 
 app.put('/api/schedules/:id', auth.requireUser, (req, res) => {
   const s = store.getSchedule(req.params.id);
   if (!s || s.owner !== req.user.id) return res.status(404).json({ error: 'Schedule not found.' });
   try {
-    const patch = parseSchedule(req.body, s);
+    const patch = parseSchedule(req.user, req.body, s);
     store.updateSchedule(s.id, patch);
     if (Date.parse(patch.nextRun) <= Date.now() + 1000) scheduler.tick();
     res.json({ schedule: store.getSchedule(s.id) });
-  } catch (err) { res.status(400).json({ error: err.message }); }
+  } catch (err) { res.status(err.status || 400).json({ error: err.message }); }
 });
 
 app.delete('/api/schedules/:id', auth.requireUser, (req, res) => {
@@ -483,6 +548,9 @@ ${row('Check a list of sites, report by email', () => yes)}
 ${row('Scheduled automatic checks', (p) => (p.autoSites ? `${yes}<br><small>up to ${p.autoSites} site${p.autoSites > 1 ? 's' : ''}</small>` : no))}
 ${row('Links checked per month (auto)', (p) => (p.monthlyLinks ? p.monthlyLinks.toLocaleString('en-US') : no))}
 ${row('Ignore lists, crawl interval, timeouts', (p) => (p.autoSites ? yes : no))}
+${row('reCAPTCHA detection on every scanned page', () => yes)}
+${row('Content checklist: find emails, phone numbers and your own text', (p) => (p.checklist ? yes : no))}
+${row('Reports to Slack', () => yes)}
 ${row('CSV / JSON export', () => yes)}
 ${row('Price', price)}
 ${row('', cta)}
@@ -516,6 +584,7 @@ function render(req, res, page, status = 200) {
     description: esc(page.description || 'LinkLantern finds broken links on your website.'),
     pageId: page.view,
     auth: req.user ? 'user' : 'guest',
+    planTier: req.user && getPlan(req.user.plan).checklist ? 'paid' : 'free',
     year: String(new Date().getFullYear()),
     manualMaxLinks: config.scans.manualMaxLinks.toLocaleString('en-US'),
     ...(page.vars ? page.vars(req) : {}),

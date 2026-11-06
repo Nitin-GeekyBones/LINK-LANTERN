@@ -27,6 +27,7 @@ export function startSchedule({ store, scans, config }, sched, { manual = false 
   if (remaining <= 0) return { error: 'Your monthly link quota is used up. It resets on the 1st of the month.' };
   const report = scans.createScan({
     owner: owner.id, type: 'auto', url: sched.url, mode: 'site', scheduleId: sched.id, skipActiveCheck: true,
+    checklist: sched.checklist || null, slack: !!(sched.notifySlack && owner.slackWebhookUrl),
     limits: {
       maxLinks: Math.min(remaining, config.scans.autoMaxLinksPerScan),
       maxPages: config.scans.autoMaxPages,

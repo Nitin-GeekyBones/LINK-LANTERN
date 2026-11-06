@@ -62,6 +62,32 @@ export async function init(page) {
       form.reset();
       toast('Password changed.');
     });
+    const slackForm = $('#slack-form');
+    const slackStatus = (on) => {
+      $('#slack-status').innerHTML = on
+        ? '<span class="pill ok">Connected</span> Reports you send to Slack go to this webhook.'
+        : '<span class="pill skipped">Not connected</span>';
+      $('[data-slack-test]', slackForm).disabled = !on;
+      $('[data-slack-remove]', slackForm).disabled = !on;
+    };
+    slackStatus(me.user.slackConfigured);
+    handleForm(slackForm, async (d, form) => {
+      if (!d.webhookUrl.trim()) throw new Error('Paste the webhook URL from Slack.');
+      const r = await api('/api/account/slack', { method: 'PUT', body: { webhookUrl: d.webhookUrl } });
+      form.webhookUrl.value = '';
+      slackStatus(r.user.slackConfigured);
+      toast('Slack webhook saved.');
+    });
+    $('[data-slack-test]', slackForm).addEventListener('click', async (e) => {
+      e.target.disabled = true;
+      try { await api('/api/account/slack/test', { method: 'POST', body: {} }); toast('Test message sent. Check your Slack channel.'); } catch (err) { toast(err.message, 6000); }
+      e.target.disabled = false;
+    });
+    $('[data-slack-remove]', slackForm).addEventListener('click', async () => {
+      if (!confirm('Disconnect Slack? Checks and schedules will stop posting there.')) return;
+      try { const r = await api('/api/account/slack', { method: 'PUT', body: { webhookUrl: '' } }); slackStatus(r.user.slackConfigured); toast('Slack disconnected.'); } catch (err) { toast(err.message); }
+    });
+
     handleForm($('#delete-form'), async (d) => {
       if (!confirm('Delete your account, reports and schedules permanently?')) return;
       await api('/api/account', { method: 'DELETE', body: d });

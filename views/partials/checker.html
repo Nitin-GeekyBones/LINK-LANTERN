@@ -12,8 +12,10 @@
       <label><input type="radio" name="mode" value="page"><span>Single page</span></label>
     </fieldset>
     <label class="check" data-user-only><input type="checkbox" name="emailWhenDone"> Email me the report when it's done</label>
+    <label class="check" data-user-only><input type="checkbox" name="slack" data-slack-option> Send the report to Slack</label>
     <span class="small muted" data-guest-only>Up to {{manualMaxLinks}} links per check. No account needed.</span>
   </div>
+  <div class="checker-extras" data-paid-only>{{> checklist}}</div>
   <div class="captcha" hidden>
     <img alt="Security code" width="150" height="50">
     <label for="captcha-answer" class="visually-hidden">Type the code shown</label>

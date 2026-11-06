@@ -11,6 +11,7 @@
           <li><b>Big sites welcome</b>Scheduled scans check far more than the {{manualMaxLinks}}-link limit of a manual check, up to your monthly allowance.</li>
           <li><b>Fine control</b>Ignore URL patterns, slow the crawl down, adjust timeouts, keep the scan inside one folder.</li>
           <li><b>Quiet when all is well</b>Optionally skip the email when a scan finds nothing broken.</li>
+          <li><b>Slack and content checks</b>Post each report to a Slack channel, and search every page for emails, phone numbers or your own phrases.</li>
         </ul>
       </div>
       <div class="form-card">
@@ -101,8 +102,10 @@
       <label class="check"><input type="checkbox" name="restrictToDir"> Stay inside this folder (only explore pages under the starting address)</label>
       <label class="check"><input type="checkbox" name="overrideNofollow"> Follow nofollow links (explore pages linked with <code>rel="nofollow"</code> or marked <code>nofollow</code> in a robots meta tag)</label>
       <label class="check"><input type="checkbox" name="suppressEmptyEmail"> Don't email me when a scan finds no problems</label>
+      <label class="check"><input type="checkbox" name="slack" data-slack-option> Send each report to Slack (follows the email setting above)</label>
       <label class="check"><input type="checkbox" name="active" checked> Schedule is active</label>
     </details>
+    {{> checklist}}
     <p class="form-error" role="alert"></p>
     <div class="dialog-actions">
       <button class="btn btn-ghost" type="button" data-close>Cancel</button>
